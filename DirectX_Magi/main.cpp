@@ -51,6 +51,8 @@ ID3D12CommandAllocator* _cmdAllocator = nullptr;
 ID3D12GraphicsCommandList* _cmdList = nullptr;
 ID3D12CommandQueue* _cmdQueue = nullptr;
 
+ID3D12DescriptorHeap* _rtvHeaps;
+
 #ifdef _DEBUG
 int main() {
 #else
@@ -162,6 +164,54 @@ int WINAPI() WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	// キュー生成
 	result = _device->CreateCommandQueue(&cmdQueueDesc, IID_PPV_ARGS(&_cmdQueue));
+
+	// 説明オブジェクト作成
+	DXGI_SWAP_CHAIN_DESC1 swapchaindesc{};
+
+	swapchaindesc.Width = window_width;
+	swapchaindesc.Height = window_height;
+	swapchaindesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	swapchaindesc.Stereo = false;
+	swapchaindesc.SampleDesc.Count = 1;
+	swapchaindesc.SampleDesc.Quality = 0;
+	swapchaindesc.BufferUsage = DXGI_USAGE_BACK_BUFFER;
+	swapchaindesc.BufferCount = 2;
+
+	// バックバッファ―は伸び縮み可能
+	swapchaindesc.Scaling = DXGI_SCALING_STRETCH;
+
+	// フリップ後は即破棄
+	swapchaindesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+
+	// 特に指定なし
+	swapchaindesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+
+	// ウインドウ<=>フルスクリーンの切り替え可能
+	swapchaindesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+
+	result = _dxgiFactory->CreateSwapChainForHwnd(
+		_cmdQueue,
+		hwnd,
+		&swapchaindesc,
+		nullptr,
+		nullptr,
+		(IDXGISwapChain1**)&_swapchain
+	);
+
+	D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};
+
+	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;		// レンダーターゲットビュー
+	heapDesc.NodeMask = 0;
+	heapDesc.NumDescriptors = 2;						// 表裏の2つ
+	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;	// 特に指定なし
+
+	// デスクリプタ作成
+	result = _device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&_rtvHeaps));
+
+	std::vector<ID3D12Resource*> _backBuffers(swapchaindesc.BufferCount);
+	for (int i = 0; i < swapchaindesc.BufferCount; i++) {
+		result = _swapchain->GetBuffer(i, IID_PPV_ARGS(&_backBuffers[i]));
+	}
 
 	MSG msg = {};
 
